@@ -305,9 +305,17 @@ rules in logic and an argument against schemas!
 Conclusion
 ==========
 
-And that's that! Notice how simple our code is, how easy it is to verify its
-correctness, and then consider what it allows us to do: with it, we can verify
-with absolute confidence every single tautology of propositional logic.
+And that's that! It turns out (and later, we shall write a program to prove
+it), that every single tautology can be obtained using our interface. We just
+need three axioms and two inference rules, and then everything we want to prove
+about tautologies is verifiable in a secure way.
+
+This is to say that our kernel is "complete." But just as importantly, it is
+also "consistent". *Only* tautologies can be obtained using our interface.
+
+Notice how simple our code is, how easy it is to verify its correctness, and
+then consider what it allows us to do: with it, we can verify with absolute
+confidence every single tautology of propositional logic.
 
 Moreover, we have turned the rough ideas of "proofs", and "axioms" and
 "inference rules" into very clear programming terms. Now, if you want to know
