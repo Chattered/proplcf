@@ -305,15 +305,17 @@ undecidable! Thus, we have to go the axiomatic route.
 
 Next time: derived syntax and useful utilities.
 
-[1] Well, *classical* logic, anyway!  [2] NP-hard, that is.  [3] p <= q for
-Boolean expressions says that p being true implies that q is true. This is a
-very nice thing to observe and it generalises to intuitionistic logic where
-there are many more possible truth values than just the usual True and
-False. The important point about truth-values is that they can be [partially]
-*ordered*, and in Boolean, False < True.  [4] Honk if you like Curry and
-Howard!  [5] Well, you had to learn Haskell first, didn't you? But then, you
-had to learn English too. And if you were learning from a logic textbook, you'd
-be expected to know a bit of mathematical symbolism. We often refer to these
+[1] Well, *classical* logic, anyway!
+[2] NP-hard, that is.
+[3] p <= q for Boolean expressions says that p being true implies that q is
+true. This is a very nice thing to observe and it generalises to intuitionistic
+logic where there are many more possible truth values than just the usual True
+and False. The important point about truth-values is that they can be
+[partially] *ordered*, and in Boolean, False < True.
+[4] Honk if you like Curry and Howard!
+[5] Well, you had to learn Haskell first, didn't you? But then, you had to
+learn English too. And if you were learning from a logic textbook, you'd be
+expected to know a bit of mathematical symbolism. We often refer to these
 requirements as knowing a suitable "metalanguage." What the Haskell code tells
 you is that the only metalanguage one needs for logic is the language of
 Haskell itself. Standard ML works too. Ever wondered what "ML" stood for? The
