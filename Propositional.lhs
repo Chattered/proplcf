@@ -61,7 +61,8 @@ the only way to obtain values in the type is by using the rest of the
 interface, and we will show how to carefully define that interface so that the
 only values a user can produce are precisely the *tautologies*.
 
-Minimal Connectives ===================
+Minimal Connectives
+===================
 
 We first need to define our Boolean expressions, and that means deciding on the
 primitive Boolean operations.  There's many usual suspects we can choose from
@@ -130,7 +131,8 @@ We'll need some variables for later, so we'll provide some now, drawing from the
 > r :: Term String
 > (p,q,r) = (Var "p",Var "q",Var "r")
 
-Axioms ======
+Axioms
+======
 
 And now the juicy part! We need *axioms*. Axioms will be the starting points of
 all of our logical proofs. Every single theorem we will obtain outside the
@@ -237,25 +239,39 @@ we guarantee that users can only produce theorems by writing down correct
 proofs! That's the magic of logic kernels. Security through encapsulation via
 lovely strong types.
 
-Instantiation =============
+Instantiation
+=============
 
-It turns out (and later we shall write a program to prove the fact!) that users
-of our module can obtain *every* single tautology from our abstract Theorem
-data-type, and *only* those tautologies. But we're going to add one more rule
-for convenience, to solve an annoying problem.
+There are still many tautologies which our users cannot obtain. How would they
+go about verifying, say
 
-We want to be able to substitute terms for other terms. This will mean that
-users can move from two Boolean expressions which say basically the same thing
-with ease. Think about the following two tautologies:
+   x :=>: x ?
 
-   p :=>: p q :=>: q
+They can't, obviously! No axiom features the variable "x", and our mp rule does
+not introduce the variable either.
 
-These are *different*, but they kind of say the same thing, don't they? One is
-just a relabelling of the other. With our module as it is, a user would need to
-write down two proofs to get these two theorems, and that's a wasted
-effort. CPU cycles are cheap these days, but not *that* cheap. So let's cut
-down on the wastage and allow users to move between these tautologies via a
-single inference rule.
+Most books on propositional logic get around this problem using something
+called "schemas." These books would have us turn our nice elegant axioms into
+*functions* which now take arbitrary terms. So axiom1 would become:
+
+> -- axiom1' :: Term a -> Term a -> Theorem a
+> -- axiom1' p' q' = Theorem (p' :=>: q' :=>: p')
+
+But notice that this is no longer a single axiom, as we had above, but an
+*infinite* collection of axioms, one for each possible term with a given
+alphabet. And this leads to an annoying issue.
+
+How do we move between Boolean expressions which basically say the same thing?
+Think about the following two tautologies:
+
+   p :=>: p
+   q :=>: q
+
+These are *different*, but only trivially so. One is just a relabelling of the
+other. And yet, with our module as it is, a user would need to write down two
+proofs to get these two theorems, and that's wasted effort. CPU cycles are
+cheap these days, but not *that* cheap. So let's cut down on the wastage and
+allow users to move between these tautologies via a single inference rule.
 
 > instTerm :: (a -> Term b) -> Term a -> Term b
 > instTerm f (Var p')   = f p'
@@ -274,11 +290,17 @@ applying
 
 > -- inst (\"p" -> q)
 
-And note that the rule generally allows us to change the alphabet of our
-Boolean expressions. We could, for instance, move between a string alphabet and
+And we can do more. The rule generally allows us to change the alphabet of our
+Boolean expressions. We can, for instance, move between a string alphabet and
 an integral one with
 
 > -- inst length
+
+And now, because we can instantiate, we don't need our schematic axioms
+anymore. A schematic presentation of propositional logic might be common in
+fusty maths textbooks, but that's probably because they are written by people
+who don't count their clock cycles. See this as an argument for instantiation
+rules in logic and an argument against schemas!
 
 Conclusion
 ==========
