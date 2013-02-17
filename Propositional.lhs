@@ -2,8 +2,7 @@ Introduction
 ============
 
 This Haskell module defines a so-called "kernel" for propositional logic. What
-is propositional logic? If you're asking that question, then this program is
-for you!
+is propositional logic? This module is an answer.
 
 The *subject* matter of propositional logic is actually familiar to all of us
 programmers. It's all about the Boolean data-type [1], that simple
@@ -42,10 +41,12 @@ might start worrying about losing our jobs!
 One way to deal with this problem is to take an axiomatic approach to logic and
 implement our axioms in a *kernel*. The kernel is a very, very simple computer
 program, whose correctness we can determine just by inspection. The
-sophisticated boolean logic checkers calls out to this program via a very
-simple interface, and since the interface guarantees correctness, the outputs
-of our sophisticated tautology checker are guaranteed to be correct, whether it
+sophisticated tautology checker calls out to this program via a very simple
+interface, and since the interface guarantees correctness, the outputs of our
+sophisticated tautology checker are guaranteed to be correct, whether it
 contains bugs or not!
+
+Note: this is a *literate Haskell file*. It can be evaluated by any conforming Haskell compiler and interpreter.
 
 The Theorem data-type
 =====================
@@ -82,6 +83,7 @@ Implication is a funny thing. When we see "p :=>: q" we are supposed to read
 read it to say "p is false or q is true". That gives you the correct
 truth-table:
 
+<<<<<<< HEAD
 ----------------
 p | q | p :=>: q
 ----------------
@@ -89,6 +91,14 @@ T | T |    T
 T | F |    F
 F | T |    T
 F | F |    T
+=======
+   | p | q | p :=>: q |
+   | -----------------|
+   | T | T |    T     |
+   | T | F |    F     |
+   | F | T |    T     |
+   | F | F |    T     |
+>>>>>>> b713b2353e368bc2c2b1fa087a83afe3494b257c
 
 With negation and implication, we have the following definition for all
 possible Boolean expressions, hereafter called "terms".
@@ -163,18 +173,19 @@ q. That's obviously correct, and you can easily verify it by drawing up a
 truth-table.
 
   ==================================
-  p | q | q :=> p | p :=> (q :=>: p)
-  ==================================
-  T | T |    T    |        T
-  T | F |    T    |        T
-  F | T |    F    |        T
-  F | F |    T    |        T
+p | q | q :=> p | p :=> (q :=>: p)
+----------------------------------
+T | T |    T    |        T
+T | F |    T    |        T
+F | T |    F    |        T
+F | F |    T    |        T
 
 > axiom1 :: Theorem String
 > axiom1 = Theorem (p :=>: q :=>: p)
 
-Our next axiom is more complicated. Its type doesn't appear in the Prelude, but
-it does correspond to a function called the S-combinator
+Our next axiom is more complicated. It doesn't look like the type of any
+function in Prelude, but we could define such a function. It's usually called
+the S-combinator:
 
 > -- sComb :: (p -> q -> r) -> (p -> q) -> p -> r
 > -- sComb x y z = (x z) (y z)
@@ -188,6 +199,9 @@ Our final axiom is a so-called "classical axiom" and governs negation:
 
 > axiom3 :: Theorem String
 > axiom3 = Theorem ((Not p :=>: Not q) :=>: q :=>: p)
+
+This axiom doesn't look like the type of any working function in Haskell,
+because this is where Boolean logic departs from programming.
 
 Inference
 =========
