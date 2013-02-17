@@ -161,12 +161,12 @@ q. That's obviously correct, and you can easily verify it by drawing up a
 truth-table.
 
   ==================================
-  p | q | q :=> p | p :=> (q :=>: p)
-  ==================================
-  T | T |    T    |        T
-  T | F |    T    |        T
-  F | T |    F    |        T
-  F | F |    T    |        T
+p | q | q :=> p | p :=> (q :=>: p)
+----------------------------------
+T | T |    T    |        T
+T | F |    T    |        T
+F | T |    F    |        T
+F | F |    T    |        T
 
 > axiom1 :: Theorem String
 > axiom1 = Theorem (p :=>: q :=>: p)
