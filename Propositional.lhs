@@ -46,6 +46,8 @@ interface, and since the interface guarantees correctness, the outputs of our
 sophisticated tautology checker are guaranteed to be correct, whether it
 contains bugs or not!
 
+Note: this is a *literate Haskell file*. It can be evaluated by any conforming Haskell compiler and interpreter.
+
 The Theorem data-type
 =====================
 
@@ -81,13 +83,12 @@ Implication is a funny thing. When we see "p :=>: q" we are supposed to read
 read it to say "p is false or q is true". That gives you the correct
 truth-table:
 
-   ================
-   p | q | p :=>: q
-   ================
-   T | T |    T
-   T | F |    F
-   F | T |    T
-   F | F |    T
+   | p | q | p :=>: q |
+   | -----------------|
+   | T | T |    T     |
+   | T | F |    F     |
+   | F | T |    T     |
+   | F | F |    T     |
 
 With negation and implication, we have the following definition for all
 possible Boolean expressions, hereafter called "terms".
