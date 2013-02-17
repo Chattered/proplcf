@@ -53,7 +53,7 @@ The Theorem data-type
 Let's take a quick glance at the interface for our kernel:
 
 > module Propositional (Theorem, Term(..), axiom1, axiom2, axiom3, mp,
->                       instTerm, inst, theoremTerm) where
+>                       inst, theoremTerm) where
 
 Our Theorem data-type is the set of Boolean expressions. But notice that we do
 not export its constructors. The type is *abstract*. We engineer things so that
@@ -82,13 +82,13 @@ Implication is a funny thing. When we see "p :=>: q" we are supposed to read
 read it to say "p is false or q is true". That gives you the correct
 truth-table:
 
-   ================
-   p | q | p :=>: q
-   ================
-   T | T |    T
-   T | F |    F
-   F | T |    T
-   F | F |    T
+----------------
+p | q | p :=>: q
+----------------
+T | T |    T
+T | F |    F
+F | T |    T
+F | F |    T
 
 With negation and implication, we have the following definition for all
 possible Boolean expressions, hereafter called "terms".
@@ -117,14 +117,16 @@ Now that we have terms, let's carve out another type that we intend to abstract
 in such a way that the only values one can obtain from it are the
 tautologies. This amounts to putting a simple wrapper around Term.
 
-> newtype Theorem a = Theorem (Term a) deriving (Eq, Ord, Show)
+> newtype Theorem a = Theorem (Term a) deriving (Eq, Ord)
 
-Every theorem is a term, of course. But not vice-versa!
+Every theorem is a term, of course. But not vice-versa! We will not be
+exporting the Theorem constructor.
 
 > theoremTerm :: Theorem a -> Term a
 > theoremTerm (Theorem t) = t
 
-We'll need some variables for later, so we'll provide some now, drawing from the alphabet of strings.
+We'll need some variables for later, so we'll provide some now, drawing from
+the alphabet of strings.
 
 > p :: Term String
 > q :: Term String
@@ -136,7 +138,7 @@ Axioms
 
 And now the juicy part! We need *axioms*. Axioms will be the starting points of
 all of our logical proofs. Every single theorem we will obtain outside the
-kernel will correspond to a logical proof that a Boolean expression is always
+kernel will correspond to a logical proof that a Boolean expression is always a
 tautology. The proofs will conclude in Boolean expressions. Their starting
 premises will be *axioms*.
 
@@ -333,7 +335,7 @@ propositions, it quickly turns out to be impossible to write a nice program
 which checks what is true or false. The problem is not just hard. It's
 undecidable! Thus, we have to go the axiomatic route.
 
-Next time: derived syntax and useful utilities.
+Next up: Utils.lhs
 
 [1] Well, *classical* logic, anyway!
 [2] NP-hard, that is.
