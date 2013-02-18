@@ -26,7 +26,7 @@ and prove equivalences such as
 
 which could be rewritten to be of the form ... = True by writing
 
-   (p && (q || r) == (p && q) || (p && q)) == True
+   (p && (q || r) == (p && q) || (p && r)) == True
 
 A simple way to prove these statements is to just write a program to construct
 a truth-table. If the program verifies that every entry in the table comes out
