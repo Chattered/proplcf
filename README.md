@@ -7,4 +7,4 @@ I'm going to document and complete this as literate Haskell, inspired by John Ha
 
 For now, the only literate file is Propositional.lhs
 
-The rest will appear over coming weeks!
+I'm still not happy with that first file. It needs to be a better tutorial. :/
