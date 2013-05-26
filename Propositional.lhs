@@ -84,9 +84,8 @@ Implication is a funny thing. When we see "p :=>: q" we are supposed to read
 read it to say "p is false or q is true". That gives you the correct
 truth-table:
 
-----------------
 p | q | p :=>: q
-----------------
+--|---|---------
 T | T |    T
 T | F |    F
 F | T |    T
