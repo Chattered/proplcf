@@ -1,75 +1,90 @@
-module Utils where
+module Utils (module Proposition, (/\), (\/), (<=>)
+             ,destAnd, destEq, truth, false
+             ,splitTwo, splitThree
+             ,inst1, inst2, inst3, mp
+             ,match, instM) where
 
-import Propositional
-
-import Data.List
+import Control.Monad
 import Data.Maybe (mapMaybe)
 
-p = Var "p"
-q = Var "q"
-r = Var "r"
+import Instances
+import Proposition hiding (mp)
+import qualified Proposition as P
 
--- Derived syntax
-p \/ q  = Not p :=>: q
+infixl 4 \/
+infixl 5 /\
+
+-- | Syntax sugar for disjunction
+(\/) :: Term a -> Term a -> Term a
+p \/ q = Not p :=>: q
+
+-- | Syntax sugar for conjunction
+(/\) :: Term a -> Term a -> Term a
 p /\ q  = Not (p :=>: Not q)
+
+-- | Syntax sugar for equivalence
+(<=>) :: Term a -> Term a -> Term a
 p <=> q = (p :=>: q) /\ (q :=>: p)
-t  = p :=>: p
-f  = Not t
-        
-printTerm :: Term String -> String
-printTerm (Var p)             = p
-printTerm (Not (Var p))       = "~" ++ p
-printTerm (Not (Not p))       = "~" ++ printTerm (Not p)
-printTerm (Not p)             = "~(" ++ printTerm p ++ ")"
-printTerm ((p :=>: q) :=>: r) = "(" ++ printTerm (p :=>: q) ++ ")" 
-                               ++ " ==> " ++ printTerm r
-printTerm (p :=>: q)          = printTerm p ++ " ==> " ++ printTerm q
 
-printThm thm = "|- " ++ printTerm (theoremTerm thm)
+-- | A destructor for conjunction
+destAnd :: Term a -> (Term a, Term a)
+destAnd (Not (p :=>: Not q)) = (p,q)
 
-vars :: Eq a => Term a -> [a]
-vars (Var p)    = [p]
-vars (Not p)    = vars p
-vars (p :=>: q) = nub $ vars p ++ vars q
-        
--- Instantiate variables in a term using a lookup
-instTermM :: (Eq a) => (a -> Term b) -> [(a, Term b)] -> Term a -> Term b
-instTermM dflt l = instTerm f
-  where f p = maybe (dflt p) id (lookup p l)
-        
--- Instantiate variables in a theorem using a lookup
-instM :: (Eq a) => (a -> Term b) -> [(a, Term b)] -> Theorem a -> Theorem b
+-- | A destructor for equality
+destEq :: Term a -> (Term a, Term a)
+destEq pq = let (p :=>: q, _) = destAnd pq in (p,q)
+
+-- | Syntax sugar for truth
+truth :: a -> Term a
+truth x = Var x :=>: Var x
+
+-- | Syntax sugar for false
+false :: a -> Term a
+false = Not . truth
+
+-- | Exception throwing modus ponens
+mp :: (Eq a, Show a) => Theorem a -> Theorem a -> Theorem a
+mp imp ant =
+  case P.mp imp ant of
+  Just consequent -> consequent
+  _ -> error ("MP: " ++ show [imp,ant])
+
+-- | Instantiate the variable in a theorem drawn from a singleton alphabet.
+inst1 :: Term a -> Theorem () -> Theorem a
+inst1 p = inst (const p)
+
+splitTwo :: a -> a -> Two -> a
+splitTwo x y X = x
+splitTwo x y Y = y
+
+-- | Instantiate the two variables in a theorem drawn from the alphabet of two
+-- symbols.
+inst2 :: Term a -> Term a -> Theorem Two -> Theorem a
+inst2 x y = inst (splitTwo x y)
+
+splitThree :: a -> a -> a -> Three -> a
+splitThree p q r P = p
+splitThree p q r Q = q
+splitThree p q r R = r
+
+-- | Instantiate the three variables in a theorem drawn from the alphabet of three
+-- symbols.
+inst3 :: Term a -> Term a -> Term a -> Theorem Three -> Theorem a
+inst3 p q r = inst (splitThree p q r)
+
+-- | Instantiate variables in a theorem based additionally on an association list.
+instM :: Eq a => (a -> Term b) -> [(a, Term b)] -> Theorem a -> Theorem b
 instM dflt l = inst f
   where f p = maybe (dflt p) id (lookup p l)
-        
--- Instantiate variables in the order that they appear when in a depth-first traversal
-instL :: Eq a => [Term a] -> Theorem a -> Theorem a
-instL l p = instM Var (zip (vars (theoremTerm p)) l) p
-        
-avoid :: [String] -> String -> String
-avoid ps p = p ++ replicate maxPrimes '\''
-  where suffixes  = mapMaybe (stripPrefix p) ps
-        maxPrimes = (maximum $ 0 : map primes suffixes)
-        primes cs = 
-          case span (== '\'') cs of
-            (ps,"") -> length ps + 1
-            _       -> 0
-            
-match :: (Eq a, Eq b) => Term a -> Term b -> [[(a, Term b)]]
-match = m [] 
+
+-- | Match terms.
+match :: (Eq a, Eq b) => Term a -> Term b -> Maybe [(a, Term b)]
+match = m []
   where m is (Var p) t =
           case lookup p is of
-            Nothing -> [ (p, t) : is ]
-            Just t' -> [ is | t == t' ]
+            Nothing -> pure ((p, t) : is)
+            Just t' | t == t' -> pure is
+            _ -> mzero
         m is (Not t) (Not t')        = m is t t'
-        m is (a :=>: c) (a' :=>: c') = concat [ m is' c c' | is' <- m is a a' ]
-        m _ _ _                      = []
-
-listToError :: a -> [b] -> Either a b
-listToError x []    = Left x
-listToError _ (y:_) = Right y
-
-runError :: Either String t -> t
-runError (Left x)   = error x
-runError (Right x)  = x
-                     
+        m is (a :=>: c) (a' :=>: c') = m is a a' >>= \is' -> m is' c c'
+        m _ _ _                      = mzero

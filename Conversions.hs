@@ -1,133 +1,87 @@
--- Basic conversions and conversionals
+-- | Conversions for sequents.
 
-module Conversions where
+module Conversions (Conv(..), convMP, antC, conclC, notC
+                   ,thenC, allC, failC
+                   ,orElseC, tryC
+                   ,depthC
+                   ,symC) where
 
-import Bootstrap hiding (matchMP)
-import Propositional
-import Utils
-import Control.Monad.Error
+import Control.Monad
+import Data.Maybe
 
--- Conversions wrap functions which take terms and derive equations. Each 
+import Bootstrap hiding (matchMP, matchMPInst, concl, sequent)
+import Sequent
+
+-- | Conversions wrap functions which take terms and derive equations. Each
 -- equation has an lhs which is the original term.
-newtype Conv a = Conv (Term a -> [Theorem a])
+newtype Conv a = Conv { applyC :: Term a -> [Sequent a] }
 
-applyC :: Conv a -> Term a -> [Theorem a]
-applyC (Conv c) term = c term
+-- | Use a conversion to rewrite a sequent
+convMP :: (Ord a, Show a) => Conv a -> Sequent a -> [Sequent a]
+convMP c thm = do eq  <- applyC c (concl thm)
+                  let (l,r) = destEq (concl eq)
+                  pure (mp (mp (inst2 l r (sequent eqMP)) eq) thm)
 
--- Use a conversion to rewrite a theorem
-convMP :: Conv String -> Theorem String -> [Theorem String]
-convMP c thm = do eq  <- applyC c (theoremTerm thm)
-                  imp <- matchMP eqMP eq
-                  mp imp thm
-
--- Apply a conversion to the antecedent of a conditional
-antC :: Conv String -> Conv String
+-- | Apply a conversion to the antcedent of a conditional
+antC :: (Ord a, Show a) => Conv a -> Conv a
 antC (Conv c) = Conv f
-  where f (p :=>: q) = c p >>= matchMP substLeft'
-          where substLeft' = instM (Var . avoid (vars q)) [("p",q)] substLeft
+  where f (p :=>: q) =
+          c p >>= maybeToList . matchMPInst (const q) (sequent substLeft)
         f _          = []
-  
--- Apply a conversion to the consequent of a conditional        
-conclC :: Conv String -> Conv String
+
+-- | Apply a conversion to the consequent of a conditional
+conclC :: (Ord a, Show a) => Conv a -> Conv a
 conclC (Conv c) = Conv f
-  where f (p :=>: q) = c q >>= matchMP substRight'
-          where substRight' = instM (Var . avoid (vars p)) [("p",p)] substRight
+  where f (p :=>: q) =
+          c q >>= maybeToList . matchMPInst (const p) (sequent substRight)
         f _          = []
 
--- Apply a conversion to the body of a negation
-notC :: Conv String -> Conv String
-notC (Conv c) = Conv f 
-  where f (Not p) = c p >>= matchMP substNot
+-- | Apply a conversion to the body of a negation
+notC :: (Ord a, Show a) => Conv a -> Conv a
+notC (Conv c) = Conv f
+  where f (Not p) = c p >>= \eq ->
+          let (l,r) = destEq (concl eq) in
+          pure (mp (inst2 l r (sequent substNot)) eq)
         f _       = []
-        
--- Attempt the left conversion, and if it fails, attempt the right
-orC :: Conv a -> Conv a -> Conv a
-orC (Conv c) (Conv c') = Conv f
-  where f t = c t `mplus` c' t
-        
--- Try all conversions which succeed
-tryC :: [Conv a] -> Conv a
-tryC = foldr orC failC
 
--- Apply a conversion conditionally
-ifC :: (Term a -> Bool) -> Conv a -> Conv a
-ifC p c = Conv (\t -> if p t then applyC c t else [])
-
--- Apply one conversion after another
-thenC :: Conv String -> Conv String -> Conv String
+-- | Apply one conversion after another
+thenC :: (Ord a,Show a) => Conv a -> Conv a -> Conv a
 thenC c c' = Conv f
   where f t = do thm   <- applyC c t
-                 r     <- rhs (theoremTerm thm)
-                 thm'  <- applyC c' r
-                 thm'' <- matchMP trans thm
-                 matchMP thm'' thm'
-        rhs (Not ((p :=>: q) :=>: Not (r :=>: s))) | p == s && q == r = return q
-        rhs _  = []
-        
--- The zero for orConv and identity for thenConv: always succeeds
-allC :: Conv String
-allC = Conv (\t -> return $ instL [t] reflEq)
+                 let (x,y) = destEq (concl thm)
+                 thm'  <- applyC c' y
+                 let (y',z) = destEq (concl thm')
+                 unless (y == y') (error ("Sequent thenC"))
+                 pure (mp (mp (inst3 x y z (sequent trans)) thm) thm')
 
--- The identity for orConv and zero for thenConv: always fails
+-- | The zero for orConv and identity for thenConv: always succeeds
+allC :: Conv a
+allC = Conv (\t -> return $ inst1 t (sequent reflEq))
+
+-- | The identity for orConv and zero for thenConv: always fails
 failC :: Conv a
 failC = Conv (const [])
 
--- Sequence conversions
-everyC :: [Conv String] -> Conv String
-everyC = foldl thenC allC
-        
-isImp :: Term a -> Bool 
-isImp (p :=>: q) = True
-isImp _          = False
+-- | Try the first conversion. If it produces no results, try the second.
+orElseC :: Ord a => Conv a -> Conv a -> Conv a
+orElseC c c' = Conv (\tm ->
+                       let thms = applyC c tm in
+                       if null thms then applyC c' tm else thms)
 
-isNeg :: Term a -> Bool
-isNeg (Not p) = True
-isNeg _       = False
+-- | Try a conversion. If it produces no results, do the trivial conversion.
+tryC :: Ord a => Conv a -> Conv a
+tryC = (`orElseC` allC)
 
--- Apply a conversion to the first applicable term on a depth first search
-depthConv1 :: Conv String -> Conv String
-depthConv1 c = tryC [ c
-                    , ifC isNeg (notC c')
-                    , ifC isImp (antC c' `orC` conclC c') ]
-  where c' = depthConv1 c
-               
--- Given ⊦ P → Q and ⊦ R, attempt to match P and R and then apply mp
-matchMP :: Theorem String -> Theorem String -> [Theorem String]
-matchMP imp ant = 
-  case (theoremTerm imp, theoremTerm ant) of
-      (p :=>: q, p') -> do insts <- match p p'
-                           mp (instM Var insts imp) ant
-      _ -> []
-      
--- Convert a double-negated term by eliminating the double-negation.
-dblNegC :: Conv String
-dblNegC = Conv c
-  where c (Not (Not p)) = return $ instL [p] dblNegEq
-        c _             = []
-        dblNegEq = head $ matchMP (head $ matchMP conjI dblNegElim) dblNegIntro
+-- | Apply a conversion bottom-up.
+depthC :: (Ord a, Show a) => Conv a -> Conv a
+depthC c = tryC (antC (depthC c))
+           `thenC` tryC (conclC (depthC c))
+           `thenC` tryC (notC (depthC c))
+           `thenC` tryC c
 
--- Swap the first two hypotheses of a conditional 
-swapC :: Conv String
-swapC = Conv c
-  where c (p :=>: q :=>: r) = return $ instL [p,q,r] swapT
-        c _                 = []
-        
--- Convert x <=> y to y <=> x
-symConv :: Conv String
-symConv = Conv c
+-- | A conversion to switch the lhs and rhs of an equation.
+symC :: Eq a => Conv a
+symC = Conv c
   where c (Not ((p :=>: q) :=>: Not (r :=>: s))) | p == s && q == r =
-          return $ instL [p,q] symEq
+          return $ inst2 p q (sequent symEq)
         c _                                      = []
-
--- Uncurry the first two hypotheses of a conditional
-uncurry2 :: Conv String
-uncurry2 = Conv c
-  where c (p :=>: q :=>: r) = return $ instL [p,q,r] Bootstrap.uncurry
-        c _                 = []
-        
--- Curry the first hypothesis
-curry2 :: Conv String
-curry2 = Conv c
-  where c (Not (p :=>: Not q) :=>: r) = 
-          return $ instL [p,q,r] (head $ convMP symConv Bootstrap.uncurry)
-        c _                           = []
