@@ -20,9 +20,7 @@ instance Applicative Term where
   (<*>) = liftM2 ($)
 
 instance Monad Term where
-  Var p'     >>= f = f p'
-  Not t      >>= f = Not (t >>= f)
-  (a :=>: c) >>= f = (a >>= f) :=>: (c >>= f)
+  tm >>= f = instTerm f tm
 
 instance Foldable Term where
   foldMap = foldMapDefault
