@@ -51,6 +51,7 @@ triangle :: a -> [[a]]
 triangle = inits . repeat
 
 -- A conversion to move the mth hypothesis up n places
+pushAssum :: (Show a, Eq a) => Int -> Int -> Conv a
 pushAssum m n = foldl (.) id (replicate m conclC)
                 $ everyC [ foldr ($) swapC cc
                          | cc <- take n $ triangle conclC ]
