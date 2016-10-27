@@ -68,9 +68,16 @@ uncurry2 = Conv c
   where c (p :=>: q :=>: r) = return $ inst3 p q r Bootstrap.uncurry
         c _                 = []
 
+-- | A conversion to switch the lhs and rhs of an equation.
+symC :: Eq a => Conv a
+symC = Conv c
+  where c (Not ((p :=>: q) :=>: Not (r :=>: s))) | p == s && q == r =
+          return $ inst2 p q symEq
+        c _                                      = []
+
 -- | Curry the first hypothesis
 curry2 :: Conv a
 curry2 = Conv c
   where c (Not (p :=>: Not q) :=>: r) =
-          return $ inst3 p q r (head $ convMP symConv Bootstrap.uncurry)
+          return $ inst3 p q r (head $ convMP symC Bootstrap.uncurry)
         c _                           = []
