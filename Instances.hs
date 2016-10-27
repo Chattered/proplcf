@@ -1,8 +1,7 @@
--- | Instances for Propositional.hs. This is code that is not trustworthy enough to
--- be in the kernel, and we limit our automatic Deriving in the Propositional to just
---
--- Eq. Exercise for the reader: if Theorem automatically derived Traversable, how
--- would this make the logic unsound?
+-- | Instances for Proposition.hs. This is code that is not trustworthy enough to
+-- be in the kernel, and we limit our use of automatic Deriving in Proposition.hs to
+-- just Eq. Exercise for the reader: if Theorem automatically derived Traversable,
+-- how would this make the logic unsound?
 
 module Instances where
 
