@@ -74,7 +74,7 @@ eqTElim thm = do
   pure (mp (mp eqMP' symthm) (inst1 (pure Nothing) (sequent truthThm)))
 
 -- | A tautology verifier.
-tautology :: (Show b, Ord b) => Term b -> Maybe (Theorem b)
+tautology :: (Show a, Ord a) => Term a -> Maybe (Theorem a)
 tautology tm =
   let jtm = Just <$> tm in
   let conv = (evalRow (nub $ toList jtm) []) in
