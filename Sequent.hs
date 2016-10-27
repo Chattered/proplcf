@@ -2,7 +2,7 @@
 -- | Embed a sequent calculus for propositional logic
 
 module Sequent (module Utils
-               ,Sequent, assms, concl, sequent
+               ,Sequent, assms, concl, sequent, seqThm
                ,assume, charge, discharge, weaken
                ,mp
                ,inst1, inst2, inst3, instM

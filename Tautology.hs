@@ -65,6 +65,8 @@ truth3 =
   conj l r
 
 -- | Send Γ ⊢ P ↔ ⊤ to Γ ⊢ P
+eqTElim :: (Show a, Ord a) =>
+           Sequent (Maybe a) -> Maybe (Sequent (Maybe a))
 eqTElim thm = do
   symthm <- listToMaybe (convMP symC thm)
   let (_,r) = destEq (concl symthm)
@@ -72,11 +74,13 @@ eqTElim thm = do
   pure (mp (mp eqMP' symthm) (inst1 (pure Nothing) (sequent truthThm)))
 
 -- | A tautology verifier.
-tautology :: (Show a, Ord a) => Term a -> Maybe (Sequent a)
+tautology :: (Show b, Ord b) => Term b -> Maybe (Theorem b)
 tautology tm =
   let jtm = Just <$> tm in
   let conv = (evalRow (nub $ toList jtm) []) in
-  (fmap.fmap) (\(Just x) -> x) (listToMaybe (applyC conv jtm) >>= eqTElim)
+  let seq = listToMaybe (applyC conv jtm) >>= eqTElim in
+  let thm = seqThm <$> seq in
+  (fmap.fmap) (\(Just x) -> x) thm
   where evalRow [] row =
           depthC (foldr orElseC allC (fmap matchConv' row)) `thenC` evalTaut
         evalRow (v:vs) row = Conv $ \tm ->
