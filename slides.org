@@ -1,0 +1,665 @@
+#+OPTIONS: ':nil *:t -:t ::t <:t H:3 \n:nil ^:t arch:headline author:t c:nil
+#+OPTIONS: creator:nil d:(not "LOGBOOK") date:t e:t email:nil f:t inline:t num:t
+#+OPTIONS: p:nil pri:nil prop:nil stat:t tags:t tasks:t tex:t timestamp:t title:t
+#+OPTIONS: toc:nil todo:t |:t
+#+TITLE: Write your own Theorem Prover
+#+DATE: <2016-10-27 Thu>
+#+AUTHOR: Phil Scott
+#+EMAIL: me@philscotted.com
+#+LANGUAGE: en
+#+SELECT_TAGS: export
+#+EXCLUDE_TAGS: noexport
+#+CREATOR: Emacs 25.1.1 (Org mode 8.3.6)
+#+latex_header: \usepackage{minted}
+#+latex_header: \usepackage{bussproofs}
+#+latex_header: \mode<beamer>{\usetheme{Madrid}}
+#+latex_header: \usepackage{upquote}
+
+* Introduction                                                      :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
+We'll work through a /toy/ LCF style theorem prover for classical propositional logic. We
+will:
+
++ review the LCF architecture
++ choose a logic
++ write the kernel
++ derive basic theorems/inference rules
++ build basic proof tools
++ write a decision procedure
+
+* What is LCF?                                                      :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
+- A design style for theorem provers.
+- Follows the basic design of /Logic of Computable Functions/ (Milner, 1972).
+- Examples: HOL, HOL Light, Isabelle, Coq.
+- Syntax given by a data type whose values are logical terms.
+- There is an abstract type whose values are logical theorems.
+- Basic inference rules are functions on the abstract theorem type.
+- Derived rules are functions which call basic inference rules.
+
+* What is Classical Propositional Logic (informally)                :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
++ Syntax:
+  - Variables $P, Q, \ldots, R$ and connectives $\neg, \vee, \wedge, \rightarrow, \leftrightarrow$
+  - Terms/formulas: $P$, $\neg P$, $P \vee Q$, $P \wedge Q$, $P \rightarrow Q$, 
+    $P \leftrightarrow Q$
+
++ Semantics
+  - Truth values $\top$ and $\bot$ assigned to variables
+  - Connectives evaluate like ``truth-functions"; e.g. $\top \vee \bot = \top$
+  - Theorems are terms which always evaluate to $\top$ (tautologies)
+
++ Proof
+  Theorems can be found by truth-table checks, DPLL proof-search, or by applying
+  \emph{rules of inference to axioms}.
+
+* An inference system for propositional logic                       :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
++ Given an alphabet $\alpha$, a term is one of
+  - a variable $v \in \alpha$
+  - a negation $\neg\phi$ for some formula $\phi$ (we take $\rightarrow$ to be
+    right-associative)
+  - an implication $\psi \rightarrow \phi$ for formulas $\phi$ and $\psi$
+
++ A theorem is one of
+  - Axiom 1 :: $\phi \rightarrow \psi \rightarrow \phi$ for terms $\phi$ and $\psi$
+  - Axiom 2 :: $(\phi \rightarrow \psi \rightarrow \chi) \rightarrow (\phi
+       \rightarrow \psi) \rightarrow (\phi \rightarrow \chi)$
+       for terms $\phi$, $\psi$ and $\chi$
+  - Axiom 3 :: $(\neg \phi \rightarrow \neg \psi) \rightarrow \psi \rightarrow \phi$
+       for terms $\phi$ and $\psi$
+  - Modus Ponens :: a term $\psi$ whenever $\phi$ and $\phi \rightarrow \psi$ are
+       theorems
+
+* The Kernel (syntax)                                               :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
+** Formally
+Given an alphabet $\alpha$, a term is one of
+- a variable $v \in \alpha$
+- an implication $\psi \rightarrow \phi$ for formulas $\phi$ and $\psi$ (we take $\rightarrow$ to be
+  right-associative)
+- a negation $\neg\phi$ for some formula $\phi$
+
+** /Really/ Formally
+#+BEGIN_SRC haskell :tangle no
+  infixr 1 :=>:
+
+  data Term a = Var a
+              | Term a :=>: Term a
+              | Not (Term a)
+              deriving Eq
+#+END_SRC
+
+* Theorems                                                          :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+\small
+#+BEGIN_SRC haskell
+  axiom1 :: a -> a -> Theorem a
+  axiom1 p q = Theorem (p :=>: q :=>: p)
+
+  axiom2 :: a -> a -> a -> Theorem a
+  axiom2 p q r =
+    Theorem ((p :=>: q :=>: r) :=>: (p :=>: q) :=>: (p :=>: r))
+
+  axiom3 :: a -> a -> Theorem a
+  axiom3 p q = Theorem ((Not p :=>: Not q) :=>: q :=>: p)
+
+  mp :: Eq a => Theorem a -> Theorem a -> Theorem a
+  mp (Theorem (p :=>: q)) (Theorem p') | p == p' = Theorem q
+#+END_SRC
+
+* Securing the Kernel                                               :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+  #+BEGIN_SRC haskell
+    module Proposition (Theorem, Term(..), termOfTheorem,
+                        axiom1, axiom2, axiom3, mp ) where
+  #+END_SRC
+  
+  The =Theorem= type does not have any publicly visible constructors. The only way to
+  obtain values of =Theorem= type is to use the axioms and inference rule.
+
+* First (meta) theorem                                              :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+#+BEGIN_theorem
+  For any term $P$, $P \rightarrow P$ is a theorem.
+#+END_theorem
+
+#+BEGIN_proof
+  Take $\phi$ and $\chi$ to be $P$ and $\psi$ to be $P \rightarrow P$ in Axioms 1 and
+  2 to get:
+
+  1. $P \rightarrow (P \rightarrow P) \rightarrow P$
+  2. $(P \rightarrow (P \rightarrow P) \rightarrow P) \rightarrow (P \rightarrow P
+     \rightarrow P) \rightarrow (P \rightarrow P)$
+     
+    Apply modus ponens to 1 and 2 to get:
+
+  3. $(P \rightarrow P \rightarrow P) \rightarrow P \rightarrow P$
+  
+    Use Axiom 1 with $/phi$ and $/psi$ to be $P$ to get:
+
+  4. $(P \rightarrow P \rightarrow P)$
+
+  Apply modus ponens to 3 and 4.
+#+END_proof
+
+* First meta theorem formally                                       :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
+** Metaproof
+#+BEGIN_SRC haskell
+  theorem :: Eq a => Term a -> Theorem a
+  theorem p =
+    let step1 = axiom1 p (p :=>: p)
+        step2 = axiom2 p (p :=>: p) p
+        step3 = mp step2 step1
+        step4 = axiom1 p p
+    in mp step3 step4
+#+END_SRC
+
+** Example
+#+BEGIN_SRC text
+  > theorem (Var "P")
+  Theorem (Var "P" :=>: Var "P")
+#+END_SRC
+>
+* Issues                                                            :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
+- How many axioms are there?
+
+  #+BEGIN_SRC haskell
+    axiom1 :: a -> a -> Theorem a
+  #+END_SRC  
+
+- How many theorems did we just prove?
+
+  #+BEGIN_SRC haskell
+    theorem :: Eq a => Term a -> Theorem a
+  #+END_SRC  
+
+- Why could this be a problem for doing formal proofs?
+# Inefficient
+# We don't verify anything until we've applied `theorem`
+
+* A more(?) efficient axiomatisation                                :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+\small
+#+BEGIN_SRC haskell
+  (p,q,r) = (Var 'p', Var 'q', Var 'r')
+  axiom1 :: Theorem Char
+  axiom1 = Theorem (p :=>: q :=>: p)
+
+  axiom2 :: Theorem Char
+  axiom2 = Theorem ((p :=>: q :=>: r)
+                     :=>: (p :=>: q) :=>: (p :=>: r))
+
+  axiom3 :: Theorem Char
+  axiom3 = Theorem ((Not p :=>: Not q) :=>: q :=>: p)
+
+  instTerm :: (a -> Term b) -> Term a -> Term b
+  instTerm f (Var x)    = f x
+  instTerm f (Not t)    = Not (instTerm f t)
+  instTerm f (a :=>: c) = instTerm f a :=>: instTerm f c
+
+  inst :: (a -> Term b) -> Theorem a -> Theorem b
+  inst f (Theorem x) = Theorem (instTerm f x)
+#+END_SRC
+
+* Metaproof again                                                   :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
+** 
+#+BEGIN_SRC haskell
+  truthThm =
+    let inst1 = inst (\v -> if v == 'q' then p :=>: p else p)
+        step1 = inst1 axiom1
+        step2 = inst1 axiom2
+        step3 = mp step2 step1
+        step4 = inst (const p) axiom1
+    in mp step3 step4
+#+END_SRC
+
+** 
+#+BEGIN_SRC text
+  > theorem
+  Theorem (Var 'P' :=>: Var 'P')
+#+END_SRC
+
+* Derived syntax                                                    :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+\small
+#+BEGIN_SRC haskell
+  infixl 4 \/
+  infixl 5 /\
+
+  -- | Syntax sugar for disjunction
+  (\/) :: Term a -> Term a -> Term a
+  p \/ q = Not p :=>: q
+
+  -- | Syntax sugar for conjunction
+  (/\) :: Term a -> Term a -> Term a
+  p /\ q  = Not (p :=>: Not q)
+
+  -- | Syntax sugar for truth
+  truth :: Term Char
+  truth = p :=>: p
+
+  -- | Syntax sugar for false
+  false :: Term Char
+  false = Not truth
+#+END_SRC
+
+* A proof tool: the deduction [meta]-theorem                        :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
+** 
+  Why did we need five steps to prove $P \rightarrow P$. Can't we just use
+  conditional proof?
+
+  1. Assume $P$.
+  2. Have $P$.
+
+  Hence, $P \rightarrow P$.
+
+** Deduction Theorem
+   From $\{P\} \cup \Gamma \vdash Q$, we can derive $\Gamma \vdash P \rightarrow Q$.
+
+** 
+   But Our axiom system says nothing about assumptions!
+
+* A DSL for proof trees with assumptions                            :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
+** Syntax
+#+BEGIN_SRC haskell
+  data Proof a = Assume (Term a)
+               | UseTheorem (Theorem a)
+               | MP (Proof a) (Proof a)
+             deriving Eq
+#+END_SRC
+
+** Semantics
+#+ATTR_LaTeX: :options mathescape=t
+#+BEGIN_SRC haskell
+  -- Convert a proof tree to the form $\Gamma \vdash P$
+  sequent :: (Eq a, Show a) => Proof a -> ([Term a], Term a)
+  sequent (Assume a)   = ([a], a)
+  sequent (UseTheorem t) = ([], termOfTheorem t)
+  sequent (MP pr pr')    =
+    let (asms,  p :=>: q)   = sequent pr
+        (asms', _) = sequent pr' in
+    (nub (asms ++ asms'), q)
+#+END_SRC
+
+* A DSL for proof trees with assumptions                            :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
+** Semantics
+#+ATTR_LaTeX: :options mathescape=t
+#+BEGIN_SRC haskell
+  -- Send $\{P\} \cup \Gamma \vdash Q$ to $\Gamma \vdash P \rightarrow Q$
+  discharge :: (Ord a, Show a) => Term a -> Proof a -> Proof a
+
+  -- Push a proof through the kernel
+  verify :: Proof a -> Theorem a
+#+END_SRC
+
+** 
+   The implementation of `discharge` follows the proof of the deduction theorem!
+
+* Example with DSL                                                  :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+** We want:
+\small
+#+ATTR_LaTeX: :options mathescape=t
+#+BEGIN_SRC haskell
+  inst2 :: Term a -> Term a -> Theorem a -> Theorem a
+
+  -- $\vdash \neg P \rightarrow P \rightarrow \bot$
+  lemma1 =
+    let step1 = Assume (Not p)
+        step2 = UseTheorem (inst2 (Not p) (Not (false P)) axiom1)
+        step3 = MP step2 step1
+        step4 = UseTheorem (inst2 (false P) p axiom3)
+        step5 = MP step4 step3
+    in verify step5
+#+END_SRC
+
+#+BEGIN_SRC text
+  > lemma1
+  Theorem (Not (Var 'P') :=>: Var 'P'
+             :=>: Not (Var 'P' :=>: Var 'P'))
+#+END_SRC
+
+* Embedding Sequent Calculus                                        :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
+** Assumption carrying proofs
+   - We'd like to work with proofs of the form $\Gamma \vdash P$ without needing a
+     DSL and a separate verification step.
+   - We can identify a sequent ${P_1, P_2, \ldots, P_n} \vdash P$ with the implication
+     $P_1 \rightarrow P_1 \rightarrow \cdots \rightarrow P_n \rightarrow P$
+   - We just need to keep track of $n$:
+
+#+BEGIN_SRC haskell
+  data Sequent a = Sequent Int (Theorem a)
+#+END_SRC
+
+* Sequent inference                                                 :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+  
+** Modus Ponens on Sequents
+   Given the sequents 
+
+#+BEGIN_center
+  $\Gamma \vdash P \rightarrow Q$ and $\Delta \vdash P$, 
+#+END_center
+
+we can derive the sequent 
+
+#+BEGIN_center
+  $\Gamma \cup \Delta \vdash Q$.
+#+END_center
+
+Challenge: The union $\Gamma \cup \Delta$ must be computed in the derivation of this
+rule.
+
+* Example                                                           :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+** Suppose we want to perform Modus Ponens on
+
+#+BEGIN_center
+  $P_1, P_2, P_3 \vdash P \rightarrow Q$ and $P_1, P_3, P_4 \vdash P$
+#+END_center
+
+where $P_i < P_j$ for $i,j \in \{1,2,3,4\}$.
+
+** That is, on:
+#+BEGIN_center
+   $(3, P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow (P \rightarrow Q))$
+#+END_center
+and 
+#+BEGIN_center
+   $(3,P_1 \rightarrow P_3 \rightarrow P_4 \rightarrow P)$.
+#+END_center
+
+** Goal:
+#+BEGIN_center
+   $(4,P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow Q)$.
+#+END_center
+
+* Computation by conversion                                         :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+  First, use Axiom 1 to add extra conditions on the front of both theorems.
+
+#+BEGIN_center
+  \colorbox{green}{$P_4 \rightarrow$}$P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow (P \rightarrow Q)$
+#+END_center
+
+and 
+
+#+BEGIN_center
+  \colorbox{green}{$P_2 \rightarrow$}$P_1 \rightarrow P_3 \rightarrow P_4 \rightarrow P$
+#+END_center
+
+* Computation by conversion                                         :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+  Using 
+
+#+BEGIN_center
+    $(P \rightarrow Q \rightarrow R) \leftrightarrow (Q \rightarrow P \rightarrow R)$
+#+END_center
+
+we have
+
+#+BEGIN_LaTeX
+  \begin{align*}
+                    &\colorbox{green}{$P_4$} \rightarrow P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow (P \rightarrow Q)\\
+    \leftrightarrow &P_1 \rightarrow \colorbox{green}{$P_4$} \rightarrow P_2 \rightarrow P_3 \rightarrow (P \rightarrow Q)\\
+    \leftrightarrow &P_1 \rightarrow P_2 \rightarrow \colorbox{green}{$P_4$} \rightarrow P_3 \rightarrow (P \rightarrow Q)\\
+    \leftrightarrow &P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow \colorbox{green}{$P_4$} \rightarrow (P \rightarrow Q)
+  \end{align*}
+#+END_LaTeX
+
+and
+
+#+BEGIN_LaTeX
+  \begin{align*}
+                    &\colorbox{green}{$P_2$} \rightarrow P_1 \rightarrow P_3 \rightarrow P_4 \rightarrow P\\
+    \leftrightarrow &P_1 \rightarrow \colorbox{green}{$P_2$} \rightarrow P_3 \rightarrow P_4 \rightarrow P
+  \end{align*}
+#+END_LaTeX
+
+* Computation by conversion                                         :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+\small
+  Using
+
+#+BEGIN_center
+    $(P \rightarrow Q \rightarrow R) \leftrightarrow (P \wedge Q \rightarrow R)$
+#+END_center
+
+we have
+
+#+BEGIN_LaTeX
+\begin{align*}
+                  &P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow (P \rightarrow Q)\\
+  \leftrightarrow &P_1 \wedge P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow (P \rightarrow Q)\\
+  \leftrightarrow &P_1 \wedge P_2 \wedge P_3 \rightarrow P_4 \rightarrow (P \rightarrow Q)\\
+  \leftrightarrow &P_1 \wedge P_2 \wedge P_3 \wedge P_4 \rightarrow (P \rightarrow Q)
+\end{align*}
+#+END_LaTeX
+
+and
+
+#+BEGIN_LaTeX
+\begin{align*}
+                  &P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow P\\
+  \leftrightarrow &P_1 \wedge P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow P\\
+  \leftrightarrow &P_1 \wedge P_2 \wedge P_3 \rightarrow P_4 \rightarrow P\\
+  \leftrightarrow &P_1 \wedge P_2 \wedge P_3 \wedge P_4 \rightarrow P\\
+\end{align*}
+#+END_LaTeX
+
+* Computation by conversion                                         :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+  Using axiom 2 and modus ponens, we can then obtain
+
+#+BEGIN_center
+  $P_1 \wedge P_2 \wedge P_3 \wedge P_4 \rightarrow R$
+#+END_center
+
+Then using 
+
+#+BEGIN_center
+    $(P \rightarrow Q \rightarrow R) \leftrightarrow (P \wedge Q \rightarrow R)$
+#+END_center
+
+we have
+
+#+BEGIN_LaTeX
+\begin{align*}
+                  &P_1 \wedge P_2 \wedge P_3 \wedge P_4 \rightarrow R\\
+  \leftrightarrow &P_1 \wedge P_2 \wedge P_3 \rightarrow P_4 \rightarrow R\\
+  \leftrightarrow &P_1 \wedge P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow R\\
+  \leftrightarrow &P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow R
+\end{align*}
+#+END_LaTeX
+
+* Conversions                                                       :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+
+- A conversion is any function which sends a term $\phi$ to a list of theorems of the
+  form $\vdash \phi \leftrightarrow \psi$.
+
+- The most basic conversions come from equivalence theorems:
+  + Given a theorem of the form $\vdash \phi \leftrightarrow \psi$, we have a
+    conversion which:
+    - accepts a term $t$
+    - tries to match $t$ against $\phi$ to give an instantiation $\theta$
+    - returns $\vdash \phi[\theta] \leftrightarrow \psi[\theta]$.
+  + For example:
+    - the theorem $p \leftrightarrow p$ yields a conversion called =allC=
+    - the theorem $(x \leftrightarrow y) \leftrightarrow (y \leftrightarrow x)$
+      yields a conversion called =symC=
+    - the theorem $(P \rightarrow Q \rightarrow R) \leftrightarrow (P \wedge Q
+      \rightarrow R)$ yields a conversion called =uncurryC=
+
+* Conversionals                                                     :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+  
+  - Functions which map conversions to conversions are called /conversionals/.
+  - Examples include:
+    + =antC= :: converts only the left hand side of an implication
+    + =conclC= :: converts only the right hand side of an implication
+    + =negC= :: converts only the body of a negation
+    + =orElseC= :: tries a conversion and, if it fails, tries another
+    + =thenC= :: applies one conversion, and then a second to the results
+    + =sumC= :: tries all conversions and accumulates their results
+
+  - With these conversionals, we can algebraically construct more and more powerful
+    conversions, implementing our own strategies for converting a term, such as those
+    we need for embedding sequent calculus.
+
+* Truth Table Verification informally                               :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+  - We nominate a fresh proposition variable $X$ and define 
+    $\top \equiv X \rightarrow X$.
+  - Given a proposition, we recurse on the number of other variables.
+  - Base case: the only variable is $X$. Evaluate the term according to truth table
+    definitions for each connective. If we evaluate to $\top$, we have a tautology.
+  - Recursive case: there are $n$ variables other than $X$. Take the first variable
+    $P$ and consider the two cases $P = \top$ and $P = \bot$. Substitute in these
+    cases and verify that we have a tautology. If so, the original proposition is a
+    tautology.
+
+* Truth Table Verification for our Sequent Calculus                 :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+  - Derive a rule for case-splitting:
+
+#+BEGIN_LaTeX
+\begin{prooftree}
+  \AxiomC{$\Gamma\cup\{P\}\vdash A$}
+  \AxiomC{$\Delta\cup\{\neg P\}\vdash A$}
+  \BinaryInfC{$\Gamma \cup \Delta\vdash A$}
+\end{prooftree}
+#+END_LaTeX
+
+  - Derive theorems for evaluating tautologies:
+    + $\top \rightarrow \top \leftrightarrow \top$
+    + $\top \rightarrow \bot \leftrightarrow \bot$
+    + $\bot \rightarrow \bot \leftrightarrow \top$
+    + $\bot \rightarrow \bot \leftrightarrow \top$
+    + $\neg\top \leftrightarrow \bot$
+    + $\neg\bot \leftrightarrow \top$
+
+  - Derive
+    $P \vdash P \leftrightarrow \top$ and $\neg P \vdash P \leftrightarrow \bot$
+
+* Truth Table Verification for our Sequent Calculus                 :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+- Derive a conversion for fully traversing a proposition:
+#+BEGIN_SRC haskell
+  depthC :: Conv a -> Conv a
+  depthC c = tryC (antC (depthC c))
+             `thenC` tryC (conclC (depthC c))
+             `thenC` tryC (notC (depthC c))
+             `thenC` tryC c
+#+END_SRC
+
+- Use the conversion and our evaluation rules to fully evaluate a proposition with no
+  variables other than $X$. If we end up at $\top$, we can then use the derived rule
+
+#+BEGIN_LaTeX
+\begin{prooftree}
+  \AxiomC{$\Gamma\vdash P = \top$}
+  \UnaryInfC{$\Gamma \vdash P$}
+\end{prooftree}
+#+END_LaTeX
+
+- Wrap up in a verifier (and so claim our axioms complete):
+
+#+BEGIN_SRC haskell
+  tautology :: Term a -> Maybe (Theorem a)
+#+END_SRC
+
+* Summary                                                           :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+  - In LCF, we use a host language (ML, Haskell, Coq etc...) to secure and program
+    against a trusted core.
+  - A bootstrapping phase is usually required to get to the meat. 
+  - We can often follow textbook mathematical logic here, but we do have to worry
+    about computational efficiency.
+  - We can embed richer logics inside the host logic (e.g. a proof tree DSL or a
+    sequent calculus)
+  - Combinator languages can be used to craft strategies (for conversion, solving
+    goals with tactics)
+  - With conversions at hand, problems can be converted to a form where we can
+    implement decision procedures and other automated tools for proving theorems
+    (resolution proof, linear arithmetic, computation of Grobner bases etc...)
