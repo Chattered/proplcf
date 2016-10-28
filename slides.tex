@@ -1,4 +1,4 @@
-% Created 2016-10-27 Thu 20:45
+% Created 2016-10-28 Fri 14:51
 \documentclass[presentation]{beamer}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -86,16 +86,16 @@ Theorems can be found by truth-table checks, DPLL proof-search, or by applying
 \item Given an alphabet \(\alpha\), a term is one of
 \begin{itemize}
 \item a variable \(v \in \alpha\)
-\item a negation \(\neg\phi\) for some formula \(\phi\) (we take \(\rightarrow\) to be
-right-associative)
-\item an implication \(\psi \rightarrow \phi\) for formulas \(\phi\) and \(\psi\)
+\item an implication \(\psi \rightarrow \phi\) for formulas \(\phi\) and \(\psi\) (we take
+\(\rightarrow\) to be right-associative)
+\item a negation \(\neg\phi\) for some formula \(\phi\)
 \end{itemize}
 
 \item A theorem is one of
 \begin{description}
 \item[{Axiom 1}] \(\phi \rightarrow \psi \rightarrow \phi\) for terms \(\phi\) and \(\psi\)
 \item[{Axiom 2}] \((\phi \rightarrow \psi \rightarrow \chi) \rightarrow (\phi
-       \rightarrow \psi) \rightarrow (\phi \rightarrow \chi)\)
+       \rightarrow \psi) \rightarrow \phi \rightarrow \chi\)
        for terms \(\phi\), \(\psi\) and \(\chi\)
 \item[{Axiom 3}] \((\neg \phi \rightarrow \neg \psi) \rightarrow \psi \rightarrow \phi\)
        for terms \(\phi\) and \(\psi\)
@@ -477,6 +477,21 @@ and
 \end{frame}
 
 \begin{frame}[label={sec:orgheadline23}]{Computation by conversion}
+\begin{itemize}
+\item The two sequents now have the same list of assumptions in the same order.
+\item We cannot apply modus ponens directly, but Axiom 2 looks promising:
+\item \((\phi \rightarrow \psi \rightarrow \chi) \rightarrow (\phi
+       \rightarrow \psi) \rightarrow \phi \rightarrow \chi\)
+\item Let's see why:
+\item (\(\phi\) \(\rightarrow\) \colorbox{red}{$\psi \rightarrow \chi$}) \(\rightarrow\) (\(\phi\)
+     \(\rightarrow\) \colorbox{red}{$\psi$}) \(\rightarrow\) \(\phi\) \(\rightarrow\)
+    \colorbox{red}{$\chi$}
+\item We just need to collapse our cascade of implications. We can do that by rewriting
+to a conjunction.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline24}]{Computation by conversion}
 \small
   Using
 
@@ -503,7 +518,7 @@ and
 \end{align*}
 \end{frame}
 
-\begin{frame}[label={sec:orgheadline24}]{Computation by conversion}
+\begin{frame}[label={sec:orgheadline25}]{Computation by conversion}
 Using axiom 2 and modus ponens, we can then obtain
 
 \begin{center}
@@ -526,7 +541,7 @@ we have
 \end{align*}
 \end{frame}
 
-\begin{frame}[fragile,label={sec:orgheadline25}]{Conversions}
+\begin{frame}[fragile,label={sec:orgheadline26}]{Conversions}
  \begin{itemize}
 \item A conversion is any function which sends a term \(\phi\) to a list of theorems of the
 form \(\vdash \phi \leftrightarrow \psi\).
@@ -552,7 +567,7 @@ conversion which:
 \end{itemize}
 \end{frame}
 
-\begin{frame}[fragile,label={sec:orgheadline26}]{Conversionals}
+\begin{frame}[fragile,label={sec:orgheadline27}]{Conversionals}
  \begin{itemize}
 \item Functions which map conversions to conversions are called \emph{conversionals}.
 \item Examples include:
@@ -571,7 +586,7 @@ we need for embedding sequent calculus.
 \end{itemize}
 \end{frame}
 
-\begin{frame}[label={sec:orgheadline27}]{Truth Table Verification informally}
+\begin{frame}[label={sec:orgheadline28}]{Truth Table Verification informally}
 \begin{itemize}
 \item We nominate a fresh proposition variable \(X\) and define 
 \(\top \equiv X \rightarrow X\).
@@ -585,7 +600,7 @@ tautology.
 \end{itemize}
 \end{frame}
 
-\begin{frame}[label={sec:orgheadline28}]{Truth Table Verification for our Sequent Calculus}
+\begin{frame}[label={sec:orgheadline29}]{Truth Table Verification for our Sequent Calculus}
 \begin{itemize}
 \item Derive a rule for case-splitting:
 \end{itemize}
@@ -612,7 +627,7 @@ tautology.
 \end{itemize}
 \end{frame}
 
-\begin{frame}[fragile,label={sec:orgheadline29}]{Truth Table Verification for our Sequent Calculus}
+\begin{frame}[fragile,label={sec:orgheadline30}]{Truth Table Verification for our Sequent Calculus}
  \begin{itemize}
 \item Derive a conversion for fully traversing a proposition:
 \end{itemize}
@@ -643,7 +658,7 @@ tautology :: Term a -> Maybe (Theorem a)
 \end{minted}
 \end{frame}
 
-\begin{frame}[label={sec:orgheadline30}]{Summary}
+\begin{frame}[label={sec:orgheadline31}]{Summary}
 \begin{itemize}
 \item In LCF, we use a host language (ML, Haskell, Coq etc\ldots{}) to secure and program
 against a trusted core.

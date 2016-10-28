@@ -69,14 +69,14 @@ will:
 
 + Given an alphabet $\alpha$, a term is one of
   - a variable $v \in \alpha$
-  - a negation $\neg\phi$ for some formula $\phi$ (we take $\rightarrow$ to be
-    right-associative)
-  - an implication $\psi \rightarrow \phi$ for formulas $\phi$ and $\psi$
+  - an implication $\psi \rightarrow \phi$ for formulas $\phi$ and $\psi$ (we take
+    $\rightarrow$ to be right-associative)
+  - a negation $\neg\phi$ for some formula $\phi$
 
 + A theorem is one of
   - Axiom 1 :: $\phi \rightarrow \psi \rightarrow \phi$ for terms $\phi$ and $\psi$
   - Axiom 2 :: $(\phi \rightarrow \psi \rightarrow \chi) \rightarrow (\phi
-       \rightarrow \psi) \rightarrow (\phi \rightarrow \chi)$
+       \rightarrow \psi) \rightarrow \phi \rightarrow \chi$
        for terms $\phi$, $\psi$ and $\chi$
   - Axiom 3 :: $(\neg \phi \rightarrow \neg \psi) \rightarrow \psi \rightarrow \phi$
        for terms $\phi$ and $\psi$
@@ -479,6 +479,21 @@ and
     \leftrightarrow &P_1 \rightarrow \colorbox{green}{$P_2$} \rightarrow P_3 \rightarrow P_4 \rightarrow P
   \end{align*}
 #+END_LaTeX
+
+* Computation by conversion                                         :B_frame:
+  :PROPERTIES:
+  :BEAMER_env: frame
+  :END:
+  - The two sequents now have the same list of assumptions in the same order.
+  - We cannot apply modus ponens directly, but Axiom 2 looks promising:
+  - $(\phi \rightarrow \psi \rightarrow \chi) \rightarrow (\phi
+       \rightarrow \psi) \rightarrow \phi \rightarrow \chi$
+  - Let's see why:
+  - (\phi \rightarrow \colorbox{red}{$\psi \rightarrow \chi$}) \rightarrow (\phi
+     \rightarrow \colorbox{red}{$\psi$}) \rightarrow \phi \rightarrow
+    \colorbox{red}{$\chi$}
+  - We just need to collapse our cascade of implications. We can do that by rewriting
+    to a conjunction.
 
 * Computation by conversion                                         :B_frame:
   :PROPERTIES:
