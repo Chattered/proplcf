@@ -1,0 +1,662 @@
+% Created 2016-10-27 Thu 20:45
+\documentclass[presentation]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{fixltx2e}
+\usepackage{graphicx}
+\usepackage{grffile}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{textcomp}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\usepackage{minted}
+\usepackage{bussproofs}
+\mode<beamer>{\usetheme{Madrid}}
+\usepackage{upquote}
+\usetheme{default}
+\author{Phil Scott}
+\date{27 October 2016}
+\title{Write your own Theorem Prover}
+\hypersetup{
+ pdfauthor={Phil Scott},
+ pdftitle={Write your own Theorem Prover},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 25.1.1 (Org mode 8.3.6)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+
+\begin{frame}[label={sec:orgheadline1}]{Introduction}
+We'll work through a \emph{toy} LCF style theorem prover for classical propositional logic. We
+will:
+
+\begin{itemize}
+\item review the LCF architecture
+\item choose a logic
+\item write the kernel
+\item derive basic theorems/inference rules
+\item build basic proof tools
+\item write a decision procedure
+\end{itemize}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline2}]{What is LCF?}
+\begin{itemize}
+\item A design style for theorem provers.
+\item Follows the basic design of \emph{Logic of Computable Functions} (Milner, 1972).
+\item Examples: HOL, HOL Light, Isabelle, Coq.
+\item Syntax given by a data type whose values are logical terms.
+\item There is an abstract type whose values are logical theorems.
+\item Basic inference rules are functions on the abstract theorem type.
+\item Derived rules are functions which call basic inference rules.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline3}]{What is Classical Propositional Logic (informally)}
+\begin{itemize}
+\item Syntax:
+\begin{itemize}
+\item Variables \(P, Q, \ldots, R\) and connectives \(\neg, \vee, \wedge, \rightarrow, \leftrightarrow\)
+\item Terms/formulas: \(P\), \(\neg P\), \(P \vee Q\), \(P \wedge Q\), \(P \rightarrow Q\), 
+\(P \leftrightarrow Q\)
+\end{itemize}
+
+\item Semantics
+\begin{itemize}
+\item Truth values \(\top\) and \(\bot\) assigned to variables
+\item Connectives evaluate like ``truth-functions"; e.g. \(\top \vee \bot = \top\)
+\item Theorems are terms which always evaluate to \(\top\) (tautologies)
+\end{itemize}
+
+\item Proof
+Theorems can be found by truth-table checks, DPLL proof-search, or by applying
+\emph{rules of inference to axioms}.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline4}]{An inference system for propositional logic}
+\begin{itemize}
+\item Given an alphabet \(\alpha\), a term is one of
+\begin{itemize}
+\item a variable \(v \in \alpha\)
+\item a negation \(\neg\phi\) for some formula \(\phi\) (we take \(\rightarrow\) to be
+right-associative)
+\item an implication \(\psi \rightarrow \phi\) for formulas \(\phi\) and \(\psi\)
+\end{itemize}
+
+\item A theorem is one of
+\begin{description}
+\item[{Axiom 1}] \(\phi \rightarrow \psi \rightarrow \phi\) for terms \(\phi\) and \(\psi\)
+\item[{Axiom 2}] \((\phi \rightarrow \psi \rightarrow \chi) \rightarrow (\phi
+       \rightarrow \psi) \rightarrow (\phi \rightarrow \chi)\)
+       for terms \(\phi\), \(\psi\) and \(\chi\)
+\item[{Axiom 3}] \((\neg \phi \rightarrow \neg \psi) \rightarrow \psi \rightarrow \phi\)
+       for terms \(\phi\) and \(\psi\)
+\item[{Modus Ponens}] a term \(\psi\) whenever \(\phi\) and \(\phi \rightarrow \psi\) are
+theorems
+\end{description}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline5}]{The Kernel (syntax)}
+ \begin{block}{Formally}
+Given an alphabet \(\alpha\), a term is one of
+\begin{itemize}
+\item a variable \(v \in \alpha\)
+\item an implication \(\psi \rightarrow \phi\) for formulas \(\phi\) and \(\psi\) (we take \(\rightarrow\) to be
+right-associative)
+\item a negation \(\neg\phi\) for some formula \(\phi\)
+\end{itemize}
+\end{block}
+
+\begin{block}{\emph{Really} Formally}
+\begin{minted}[]{haskell}
+infixr 1 :=>:
+
+data Term a = Var a
+            | Term a :=>: Term a
+            | Not (Term a)
+            deriving Eq
+\end{minted}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline6}]{Theorems}
+ \small
+\begin{minted}[]{haskell}
+axiom1 :: a -> a -> Theorem a
+axiom1 p q = Theorem (p :=>: q :=>: p)
+
+axiom2 :: a -> a -> a -> Theorem a
+axiom2 p q r =
+  Theorem ((p :=>: q :=>: r) :=>: (p :=>: q) :=>: (p :=>: r))
+
+axiom3 :: a -> a -> Theorem a
+axiom3 p q = Theorem ((Not p :=>: Not q) :=>: q :=>: p)
+
+mp :: Eq a => Theorem a -> Theorem a -> Theorem a
+mp (Theorem (p :=>: q)) (Theorem p') | p == p' = Theorem q
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline7}]{Securing the Kernel}
+ \begin{minted}[]{haskell}
+module Proposition (Theorem, Term(..), termOfTheorem,
+                    axiom1, axiom2, axiom3, mp ) where
+\end{minted}
+
+The \texttt{Theorem} type does not have any publicly visible constructors. The only way to
+obtain values of \texttt{Theorem} type is to use the axioms and inference rule.
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline8}]{First (meta) theorem}
+\begin{theorem}
+For any term \(P\), \(P \rightarrow P\) is a theorem.
+\end{theorem}
+
+\begin{proof}
+Take \(\phi\) and \(\chi\) to be \(P\) and \(\psi\) to be \(P \rightarrow P\) in Axioms 1 and
+2 to get:
+
+\begin{enumerate}
+\item \(P \rightarrow (P \rightarrow P) \rightarrow P\)
+\item \((P \rightarrow (P \rightarrow P) \rightarrow P) \rightarrow (P \rightarrow P
+     \rightarrow P) \rightarrow (P \rightarrow P)\)
+
+Apply modus ponens to 1 and 2 to get:
+
+\item \((P \rightarrow P \rightarrow P) \rightarrow P \rightarrow P\)
+
+Use Axiom 1 with \(/phi\) and \(/psi\) to be \(P\) to get:
+
+\item \((P \rightarrow P \rightarrow P)\)
+\end{enumerate}
+
+Apply modus ponens to 3 and 4.
+\end{proof}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline9}]{First meta theorem formally}
+ \begin{block}{Metaproof}
+\begin{minted}[]{haskell}
+theorem :: Eq a => Term a -> Theorem a
+theorem p =
+  let step1 = axiom1 p (p :=>: p)
+      step2 = axiom2 p (p :=>: p) p
+      step3 = mp step2 step1
+      step4 = axiom1 p p
+  in mp step3 step4
+\end{minted}
+\end{block}
+
+\begin{block}{Example}
+\begin{minted}[]{text}
+> theorem (Var "P")
+Theorem (Var "P" :=>: Var "P")
+\end{minted}
+>
+\end{block}
+\end{frame}
+\begin{frame}[fragile,label={sec:orgheadline10}]{Issues}
+ \begin{itemize}
+\item How many axioms are there?
+
+\begin{minted}[]{haskell}
+axiom1 :: a -> a -> Theorem a
+\end{minted}
+
+\item How many theorems did we just prove?
+
+\begin{minted}[]{haskell}
+theorem :: Eq a => Term a -> Theorem a
+\end{minted}
+
+\item Why could this be a problem for doing formal proofs?
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline11}]{A more(?) efficient axiomatisation}
+ \small
+\begin{minted}[]{haskell}
+(p,q,r) = (Var 'p', Var 'q', Var 'r')
+axiom1 :: Theorem Char
+axiom1 = Theorem (p :=>: q :=>: p)
+
+axiom2 :: Theorem Char
+axiom2 = Theorem ((p :=>: q :=>: r)
+                   :=>: (p :=>: q) :=>: (p :=>: r))
+
+axiom3 :: Theorem Char
+axiom3 = Theorem ((Not p :=>: Not q) :=>: q :=>: p)
+
+instTerm :: (a -> Term b) -> Term a -> Term b
+instTerm f (Var x)    = f x
+instTerm f (Not t)    = Not (instTerm f t)
+instTerm f (a :=>: c) = instTerm f a :=>: instTerm f c
+
+inst :: (a -> Term b) -> Theorem a -> Theorem b
+inst f (Theorem x) = Theorem (instTerm f x)
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline12}]{Metaproof again}
+ \begin{block}{}
+\begin{minted}[]{haskell}
+truthThm =
+  let inst1 = inst (\v -> if v == 'q' then p :=>: p else p)
+      step1 = inst1 axiom1
+      step2 = inst1 axiom2
+      step3 = mp step2 step1
+      step4 = inst (const p) axiom1
+  in mp step3 step4
+\end{minted}
+\end{block}
+
+\begin{block}{}
+\begin{minted}[]{text}
+> theorem
+Theorem (Var 'P' :=>: Var 'P')
+\end{minted}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline13}]{Derived syntax}
+ \small
+\begin{minted}[]{haskell}
+infixl 4 \/
+infixl 5 /\
+
+-- | Syntax sugar for disjunction
+(\/) :: Term a -> Term a -> Term a
+p \/ q = Not p :=>: q
+
+-- | Syntax sugar for conjunction
+(/\) :: Term a -> Term a -> Term a
+p /\ q  = Not (p :=>: Not q)
+
+-- | Syntax sugar for truth
+truth :: Term Char
+truth = p :=>: p
+
+-- | Syntax sugar for false
+false :: Term Char
+false = Not truth
+\end{minted}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline14}]{A proof tool: the deduction [meta]-theorem}
+\begin{block}{}
+Why did we need five steps to prove \(P \rightarrow P\). Can't we just use
+conditional proof?
+
+\begin{enumerate}
+\item Assume \(P\).
+\item Have \(P\).
+\end{enumerate}
+
+Hence, \(P \rightarrow P\).
+\end{block}
+
+\begin{block}{Deduction Theorem}
+From \(\{P\} \cup \Gamma \vdash Q\), we can derive \(\Gamma \vdash P \rightarrow Q\).
+\end{block}
+
+\begin{block}{}
+But Our axiom system says nothing about assumptions!
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline15}]{A DSL for proof trees with assumptions}
+ \begin{block}{Syntax}
+\begin{minted}[]{haskell}
+data Proof a = Assume (Term a)
+             | UseTheorem (Theorem a)
+             | MP (Proof a) (Proof a)
+           deriving Eq
+\end{minted}
+\end{block}
+
+\begin{block}{Semantics}
+\begin{minted}[,mathescape=t]{haskell}
+-- Convert a proof tree to the form $\Gamma \vdash P$
+sequent :: (Eq a, Show a) => Proof a -> ([Term a], Term a)
+sequent (Assume a)   = ([a], a)
+sequent (UseTheorem t) = ([], termOfTheorem t)
+sequent (MP pr pr')    =
+  let (asms,  p :=>: q)   = sequent pr
+      (asms', _) = sequent pr' in
+  (nub (asms ++ asms'), q)
+\end{minted}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline16}]{A DSL for proof trees with assumptions}
+ \begin{block}{Semantics}
+\begin{minted}[,mathescape=t]{haskell}
+-- Send $\{P\} \cup \Gamma \vdash Q$ to $\Gamma \vdash P \rightarrow Q$
+discharge :: (Ord a, Show a) => Term a -> Proof a -> Proof a
+
+-- Push a proof through the kernel
+verify :: Proof a -> Theorem a
+\end{minted}
+\end{block}
+
+\begin{block}{}
+The implementation of `discharge` follows the proof of the deduction theorem!
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline17}]{Example with DSL}
+ \begin{block}{We want:}
+\small
+\begin{minted}[,mathescape=t]{haskell}
+inst2 :: Term a -> Term a -> Theorem a -> Theorem a
+
+-- $\vdash \neg P \rightarrow P \rightarrow \bot$
+lemma1 =
+  let step1 = Assume (Not p)
+      step2 = UseTheorem (inst2 (Not p) (Not (false P)) axiom1)
+      step3 = MP step2 step1
+      step4 = UseTheorem (inst2 (false P) p axiom3)
+      step5 = MP step4 step3
+  in verify step5
+\end{minted}
+
+\begin{minted}[]{text}
+> lemma1
+Theorem (Not (Var 'P') :=>: Var 'P'
+           :=>: Not (Var 'P' :=>: Var 'P'))
+\end{minted}
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline18}]{Embedding Sequent Calculus}
+ \begin{block}{Assumption carrying proofs}
+\begin{itemize}
+\item We'd like to work with proofs of the form \(\Gamma \vdash P\) without needing a
+DSL and a separate verification step.
+\item We can identify a sequent \({P_1, P_2, \ldots, P_n} \vdash P\) with the implication
+\(P_1 \rightarrow P_1 \rightarrow \cdots \rightarrow P_n \rightarrow P\)
+\item We just need to keep track of \(n\):
+\end{itemize}
+
+\begin{minted}[]{haskell}
+data Sequent a = Sequent Int (Theorem a)
+\end{minted}
+\end{block}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline19}]{Sequent inference}
+\begin{block}{Modus Ponens on Sequents}
+Given the sequents 
+
+\begin{center}
+\(\Gamma \vdash P \rightarrow Q\) and \(\Delta \vdash P\), 
+\end{center}
+
+we can derive the sequent 
+
+\begin{center}
+\(\Gamma \cup \Delta \vdash Q\).
+\end{center}
+
+Challenge: The union \(\Gamma \cup \Delta\) must be computed in the derivation of this
+rule.
+\end{block}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline20}]{Example}
+\begin{block}{Suppose we want to perform Modus Ponens on}
+\begin{center}
+\(P_1, P_2, P_3 \vdash P \rightarrow Q\) and \(P_1, P_3, P_4 \vdash P\)
+\end{center}
+
+where \(P_i < P_j\) for \(i,j \in \{1,2,3,4\}\).
+\end{block}
+
+\begin{block}{That is, on:}
+\begin{center}
+\((3, P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow (P \rightarrow Q))\)
+\end{center}
+and 
+\begin{center}
+\((3,P_1 \rightarrow P_3 \rightarrow P_4 \rightarrow P)\).
+\end{center}
+\end{block}
+
+\begin{block}{Goal:}
+\begin{center}
+\((4,P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow Q)\).
+\end{center}
+\end{block}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline21}]{Computation by conversion}
+First, use Axiom 1 to add extra conditions on the front of both theorems.
+
+\begin{center}
+\colorbox{green}{$P_4 \rightarrow$}\(P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow (P \rightarrow Q)\)
+\end{center}
+
+and 
+
+\begin{center}
+\colorbox{green}{$P_2 \rightarrow$}\(P_1 \rightarrow P_3 \rightarrow P_4 \rightarrow P\)
+\end{center}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline22}]{Computation by conversion}
+Using 
+
+\begin{center}
+\((P \rightarrow Q \rightarrow R) \leftrightarrow (Q \rightarrow P \rightarrow R)\)
+\end{center}
+
+we have
+
+\begin{align*}
+                  &\colorbox{green}{$P_4$} \rightarrow P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow (P \rightarrow Q)\\
+  \leftrightarrow &P_1 \rightarrow \colorbox{green}{$P_4$} \rightarrow P_2 \rightarrow P_3 \rightarrow (P \rightarrow Q)\\
+  \leftrightarrow &P_1 \rightarrow P_2 \rightarrow \colorbox{green}{$P_4$} \rightarrow P_3 \rightarrow (P \rightarrow Q)\\
+  \leftrightarrow &P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow \colorbox{green}{$P_4$} \rightarrow (P \rightarrow Q)
+\end{align*}
+
+and
+
+\begin{align*}
+                  &\colorbox{green}{$P_2$} \rightarrow P_1 \rightarrow P_3 \rightarrow P_4 \rightarrow P\\
+  \leftrightarrow &P_1 \rightarrow \colorbox{green}{$P_2$} \rightarrow P_3 \rightarrow P_4 \rightarrow P
+\end{align*}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline23}]{Computation by conversion}
+\small
+  Using
+
+\begin{center}
+\((P \rightarrow Q \rightarrow R) \leftrightarrow (P \wedge Q \rightarrow R)\)
+\end{center}
+
+we have
+
+\begin{align*}
+                  &P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow (P \rightarrow Q)\\
+  \leftrightarrow &P_1 \wedge P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow (P \rightarrow Q)\\
+  \leftrightarrow &P_1 \wedge P_2 \wedge P_3 \rightarrow P_4 \rightarrow (P \rightarrow Q)\\
+  \leftrightarrow &P_1 \wedge P_2 \wedge P_3 \wedge P_4 \rightarrow (P \rightarrow Q)
+\end{align*}
+
+and
+
+\begin{align*}
+                  &P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow P\\
+  \leftrightarrow &P_1 \wedge P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow P\\
+  \leftrightarrow &P_1 \wedge P_2 \wedge P_3 \rightarrow P_4 \rightarrow P\\
+  \leftrightarrow &P_1 \wedge P_2 \wedge P_3 \wedge P_4 \rightarrow P\\
+\end{align*}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline24}]{Computation by conversion}
+Using axiom 2 and modus ponens, we can then obtain
+
+\begin{center}
+\(P_1 \wedge P_2 \wedge P_3 \wedge P_4 \rightarrow R\)
+\end{center}
+
+Then using 
+
+\begin{center}
+\((P \rightarrow Q \rightarrow R) \leftrightarrow (P \wedge Q \rightarrow R)\)
+\end{center}
+
+we have
+
+\begin{align*}
+                  &P_1 \wedge P_2 \wedge P_3 \wedge P_4 \rightarrow R\\
+  \leftrightarrow &P_1 \wedge P_2 \wedge P_3 \rightarrow P_4 \rightarrow R\\
+  \leftrightarrow &P_1 \wedge P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow R\\
+  \leftrightarrow &P_1 \rightarrow P_2 \rightarrow P_3 \rightarrow P_4 \rightarrow R
+\end{align*}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline25}]{Conversions}
+ \begin{itemize}
+\item A conversion is any function which sends a term \(\phi\) to a list of theorems of the
+form \(\vdash \phi \leftrightarrow \psi\).
+
+\item The most basic conversions come from equivalence theorems:
+\begin{itemize}
+\item Given a theorem of the form \(\vdash \phi \leftrightarrow \psi\), we have a
+conversion which:
+\begin{itemize}
+\item accepts a term \(t\)
+\item tries to match \(t\) against \(\phi\) to give an instantiation \(\theta\)
+\item returns \(\vdash \phi[\theta] \leftrightarrow \psi[\theta]\).
+\end{itemize}
+\item For example:
+\begin{itemize}
+\item the theorem \(p \leftrightarrow p\) yields a conversion called \texttt{allC}
+\item the theorem \((x \leftrightarrow y) \leftrightarrow (y \leftrightarrow x)\)
+      yields a conversion called \texttt{symC}
+\item the theorem \((P \rightarrow Q \rightarrow R) \leftrightarrow (P \wedge Q
+      \rightarrow R)\) yields a conversion called \texttt{uncurryC}
+\end{itemize}
+\end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline26}]{Conversionals}
+ \begin{itemize}
+\item Functions which map conversions to conversions are called \emph{conversionals}.
+\item Examples include:
+\begin{description}
+\item[{\texttt{antC}}] converts only the left hand side of an implication
+\item[{\texttt{conclC}}] converts only the right hand side of an implication
+\item[{\texttt{negC}}] converts only the body of a negation
+\item[{\texttt{orElseC}}] tries a conversion and, if it fails, tries another
+\item[{\texttt{thenC}}] applies one conversion, and then a second to the results
+\item[{\texttt{sumC}}] tries all conversions and accumulates their results
+\end{description}
+
+\item With these conversionals, we can algebraically construct more and more powerful
+conversions, implementing our own strategies for converting a term, such as those
+we need for embedding sequent calculus.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline27}]{Truth Table Verification informally}
+\begin{itemize}
+\item We nominate a fresh proposition variable \(X\) and define 
+\(\top \equiv X \rightarrow X\).
+\item Given a proposition, we recurse on the number of other variables.
+\item Base case: the only variable is \(X\). Evaluate the term according to truth table
+definitions for each connective. If we evaluate to \(\top\), we have a tautology.
+\item Recursive case: there are \(n\) variables other than \(X\). Take the first variable
+\(P\) and consider the two cases \(P = \top\) and \(P = \bot\). Substitute in these
+cases and verify that we have a tautology. If so, the original proposition is a
+tautology.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline28}]{Truth Table Verification for our Sequent Calculus}
+\begin{itemize}
+\item Derive a rule for case-splitting:
+\end{itemize}
+
+\begin{prooftree}
+  \AxiomC{$\Gamma\cup\{P\}\vdash A$}
+  \AxiomC{$\Delta\cup\{\neg P\}\vdash A$}
+  \BinaryInfC{$\Gamma \cup \Delta\vdash A$}
+\end{prooftree}
+
+\begin{itemize}
+\item Derive theorems for evaluating tautologies:
+\begin{itemize}
+\item \(\top \rightarrow \top \leftrightarrow \top\)
+\item \(\top \rightarrow \bot \leftrightarrow \bot\)
+\item \(\bot \rightarrow \bot \leftrightarrow \top\)
+\item \(\bot \rightarrow \bot \leftrightarrow \top\)
+\item \(\neg\top \leftrightarrow \bot\)
+\item \(\neg\bot \leftrightarrow \top\)
+\end{itemize}
+
+\item Derive
+\(P \vdash P \leftrightarrow \top\) and \(\neg P \vdash P \leftrightarrow \bot\)
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile,label={sec:orgheadline29}]{Truth Table Verification for our Sequent Calculus}
+ \begin{itemize}
+\item Derive a conversion for fully traversing a proposition:
+\end{itemize}
+\begin{minted}[]{haskell}
+depthC :: Conv a -> Conv a
+depthC c = tryC (antC (depthC c))
+           `thenC` tryC (conclC (depthC c))
+           `thenC` tryC (notC (depthC c))
+           `thenC` tryC c
+\end{minted}
+
+\begin{itemize}
+\item Use the conversion and our evaluation rules to fully evaluate a proposition with no
+variables other than \(X\). If we end up at \(\top\), we can then use the derived rule
+\end{itemize}
+
+\begin{prooftree}
+  \AxiomC{$\Gamma\vdash P = \top$}
+  \UnaryInfC{$\Gamma \vdash P$}
+\end{prooftree}
+
+\begin{itemize}
+\item Wrap up in a verifier (and so claim our axioms complete):
+\end{itemize}
+
+\begin{minted}[]{haskell}
+tautology :: Term a -> Maybe (Theorem a)
+\end{minted}
+\end{frame}
+
+\begin{frame}[label={sec:orgheadline30}]{Summary}
+\begin{itemize}
+\item In LCF, we use a host language (ML, Haskell, Coq etc\ldots{}) to secure and program
+against a trusted core.
+\item A bootstrapping phase is usually required to get to the meat.
+\item We can often follow textbook mathematical logic here, but we do have to worry
+about computational efficiency.
+\item We can embed richer logics inside the host logic (e.g. a proof tree DSL or a
+sequent calculus)
+\item Combinator languages can be used to craft strategies (for conversion, solving
+goals with tactics)
+\item With conversions at hand, problems can be converted to a form where we can
+implement decision procedures and other automated tools for proving theorems
+(resolution proof, linear arithmetic, computation of Grobner bases etc\ldots{})
+\end{itemize}
+\end{frame}
+\end{document}
